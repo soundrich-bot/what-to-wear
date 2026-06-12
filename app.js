@@ -29,7 +29,8 @@ function loadJSON(key) {
 
 let settings = { ...DEFAULTS, ...(loadJSON(SETTINGS_KEY) || {}) };
 let place = loadJSON(PLACE_KEY); // { lat, lon, name }
-let weather = null;
+let data = null;                 // parsed Open-Meteo payload
+let view = 0;                    // 0 = today, 1 = tomorrow
 
 /* ---------- dom helpers ---------- */
 
@@ -62,39 +63,99 @@ function codeInfo(code, isDay) {
 const RAINY_CODES = [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99];
 const SNOWY_CODES = [71, 73, 75, 77, 85, 86];
 
+// how grim is this weather code? used to pick a segment's headline conditions
+function severity(code) {
+  if ([95, 96, 99].includes(code)) return 8;
+  if ([65, 67, 82].includes(code)) return 7;
+  if (SNOWY_CODES.includes(code)) return 6;
+  if ([61, 63, 66, 80, 81].includes(code)) return 5;
+  if ([51, 53, 55, 56, 57].includes(code)) return 4;
+  if ([45, 48].includes(code)) return 3;
+  return code === 3 ? 2 : code === 2 ? 1 : 0;
+}
+
 /* ---------- recommendations ---------- */
 
 function buildRecs(w, s) {
   const recs = [];
   const add = (emoji, text) => recs.push({ emoji, text });
-  const feels = w.feels;
+  const feels = w.feels; // apparent temperature: wind chill already baked in
 
   // coat / jacket / layers
-  if (feels < s.heavyCoat) add("🧥", "Bundle up in a heavy coat");
-  else if (feels < s.jacket) add("🧥", "A light jacket will do");
-  else if (feels < s.layers) add("🧶", "Layer up — grab a jumper");
-  else add("😎", "No jacket needed — dress light");
+  if (feels < s.heavyCoat) add("🧥", "Big coat. It's proper baltic out");
+  else if (feels < s.jacket) add("🧥", "Jacket weather — chuck one on");
+  else if (feels < s.layers) add("🧶", "Jumper o'clock. Layer up");
+  else add("😎", "Skip the jacket, you'll live");
 
   // rain gear
   const rainNow = w.precip > 0 || RAINY_CODES.includes(w.code);
   const rainSoon = w.rainProb >= s.rainProb;
   if (rainNow || rainSoon) {
-    if (w.wind > s.windy) add("🧥💧", "Too windy for an umbrella — wear a rain jacket");
-    else add("☂️", rainNow ? "Take an umbrella — it's wet out there" : "Take an umbrella, rain is likely");
+    if (w.wind > s.windy) add("🧥💧", "A brolly would die out there — rain jacket");
+    else add("☂️", rainNow ? "It's chucking it down — take the brolly" : "The sky's plotting something — pack a brolly");
   } else if (w.wind > s.windy) {
-    add("🌬️", "Blustery! A windproof layer helps");
+    add("🌬️", "Blowy. Hold onto your hat");
   }
 
   // hat / gloves / scarf
-  const windChill = w.temp - feels; // how much colder it feels than it is
-  if (feels < s.hatGloves) add("🧤", "Hat, gloves and a scarf");
-  else if (windChill >= 4 && feels < s.jacket) add("🧣", "Biting wind chill — add a hat or scarf");
+  const windChill = w.temp - feels; // how much colder the wind makes it feel
+  if (feels < s.hatGloves) add("🧤", "Hat, gloves, scarf — full granny mode");
+  else if (windChill >= 4 && feels < s.jacket) add("🧣", "Wind chill's got knives — add a scarf");
 
   // little extras
-  if (SNOWY_CODES.includes(w.code)) add("👢", "Snow underfoot — waterproof boots");
-  if (w.code <= 1 && w.isDay && feels >= s.layers) add("🧢", "Sunny — cap and sunscreen");
+  if (SNOWY_CODES.includes(w.code)) add("👢", "Snow. Boots, unless you fancy wet socks");
+  if (w.code <= 1 && w.isDay && feels >= s.layers) add("🧢", "Sun's out — cap and sunscreen, don't go crispy");
 
   return recs;
+}
+
+/* ---------- day segments ---------- */
+
+const SEGMENTS = [
+  { name: "Morning", emoji: "🌅", from: 6, to: 11 },   // 6am–noon
+  { name: "Afternoon", emoji: "☀️", from: 12, to: 17 }, // noon–6pm
+  { name: "Evening", emoji: "🌆", from: 18, to: 22 },   // 6pm–11pm
+];
+
+const hourOf = (t) => +t.slice(11, 13);
+const dateOf = (t) => t.slice(0, 10);
+
+// aggregate hourly data into morning/afternoon/evening blocks for day 0 or 1;
+// for today, hours already gone are dropped (dress for what's left of the day)
+function segmentsFor(dayIdx) {
+  const date = data.daily.time[dayIdx];
+  const isToday = dateOf(data.current.time) === date;
+  const nowH = hourOf(data.current.time);
+  const h = data.hourly;
+  const out = [];
+
+  for (const sg of SEGMENTS) {
+    const idxs = [];
+    h.time.forEach((t, i) => {
+      if (dateOf(t) !== date) return;
+      const hr = hourOf(t);
+      if (hr >= sg.from && hr <= sg.to && (!isToday || hr >= nowH)) idxs.push(i);
+    });
+    if (!idxs.length) continue; // segment fully in the past
+
+    // dress for the coldest hour; plan for the worst wind/rain
+    let coldest = idxs[0];
+    for (const i of idxs) if (h.apparent_temperature[i] < h.apparent_temperature[coldest]) coldest = i;
+
+    out.push({
+      ...sg,
+      w: {
+        temp: h.temperature_2m[coldest],
+        feels: h.apparent_temperature[coldest],
+        wind: Math.max(...idxs.map((i) => h.wind_speed_10m[i])),
+        precip: idxs.reduce((sum, i) => sum + (h.precipitation[i] || 0), 0),
+        rainProb: Math.max(...idxs.map((i) => h.precipitation_probability[i] ?? 0)),
+        code: idxs.map((i) => h.weather_code[i]).reduce((a, b) => (severity(b) > severity(a) ? b : a)),
+        isDay: h.is_day[idxs[Math.floor(idxs.length / 2)]] === 1,
+      },
+    });
+  }
+  return out;
 }
 
 /* ---------- rendering ---------- */
@@ -115,37 +176,109 @@ function showWelcome(msg, emoji = "👋") {
   hide($("recsCard"));
 }
 
-function renderWeather() {
-  if (!weather) return;
-  const w = weather;
-  const info = codeInfo(w.code, w.isDay);
+function renderRecs() {
+  $("recsTitle").textContent = view === 0 ? "Today's plan of attack" : "Tomorrow's plan of attack";
+  const body = $("recsBody");
+  body.innerHTML = "";
 
-  $("wxEmoji").textContent = info.emoji;
-  $("wxTemp").textContent = `${Math.round(w.temp)}°`;
-  $("wxCond").textContent = info.label;
-  $("wxFeels").textContent = `Feels like ${Math.round(w.feels)}°`;
-  $("wxWind").textContent = `${Math.round(w.wind)} km/h`;
-  $("wxHumidity").textContent = `${Math.round(w.humidity)}%`;
-  $("wxRain").textContent = `${Math.round(w.rainProb)}%`;
-
-  const list = $("recsList");
-  list.innerHTML = "";
-  for (const rec of buildRecs(w, settings)) {
-    const li = document.createElement("li");
-    const badge = document.createElement("span");
-    badge.className = "rec-emoji";
-    badge.textContent = rec.emoji;
-    li.append(badge, document.createTextNode(rec.text));
-    list.append(li);
+  const segs = segmentsFor(view);
+  if (!segs.length) {
+    const p = document.createElement("p");
+    p.className = "after-hours";
+    p.textContent = "🛌 It's past 11pm. Pyjamas. Swipe for tomorrow.";
+    body.append(p);
+    return;
   }
+
+  for (const sg of segs) {
+    const head = document.createElement("div");
+    head.className = "segment-head";
+    const meta = `feels ${Math.round(sg.w.feels)}° · ${Math.round(sg.w.rainProb)}% rain`;
+    head.innerHTML = `<span>${sg.emoji} ${sg.name}</span><span class="segment-meta">${meta}</span>`;
+
+    const ul = document.createElement("ul");
+    ul.className = "rec-list";
+    for (const rec of buildRecs(sg.w, settings)) {
+      const li = document.createElement("li");
+      const badge = document.createElement("span");
+      badge.className = "rec-emoji";
+      badge.textContent = rec.emoji;
+      li.append(badge, document.createTextNode(rec.text));
+      ul.append(li);
+    }
+    body.append(head, ul);
+  }
+}
+
+function renderConditions() {
+  if (view === 0) {
+    const c = data.current;
+    const info = codeInfo(c.weather_code, c.is_day === 1);
+    $("wxEmoji").textContent = info.emoji;
+    $("wxTemp").textContent = `${Math.round(c.temperature_2m)}°`;
+    $("wxCond").textContent = info.label;
+    $("wxFeels").textContent = `Feels like ${Math.round(c.apparent_temperature)}°`;
+    $("wxWind").textContent = `${Math.round(c.wind_speed_10m)} km/h`;
+    $("wxWindLabel").textContent = "wind";
+    $("wxMidIco").textContent = "💧";
+    $("wxMid").textContent = `${Math.round(c.relative_humidity_2m)}%`;
+    $("wxMidLabel").textContent = "humidity";
+    // rain chance over the next 6 hours
+    const nowIdx = data.hourly.time.findIndex((t) => t === data.current.time.slice(0, 13) + ":00");
+    const next6 = data.hourly.precipitation_probability
+      .slice(Math.max(nowIdx, 0), Math.max(nowIdx, 0) + 6)
+      .filter((p) => p != null);
+    $("wxRain").textContent = `${next6.length ? Math.max(...next6) : 0}%`;
+    $("wxRainLabel").textContent = "rain next 6h";
+  } else {
+    const d = data.daily;
+    const info = codeInfo(d.weather_code[1], true);
+    $("wxEmoji").textContent = info.emoji;
+    $("wxTemp").textContent = `${Math.round(d.temperature_2m_max[1])}° / ${Math.round(d.temperature_2m_min[1])}°`;
+    $("wxCond").textContent = info.label;
+    $("wxFeels").textContent = `Feels like ${Math.round(d.apparent_temperature_min[1])}° at the worst of it`;
+    $("wxWind").textContent = `${Math.round(d.wind_speed_10m_max[1])} km/h`;
+    $("wxWindLabel").textContent = "top wind";
+    $("wxMidIco").textContent = "🥶";
+    $("wxMid").textContent = `${Math.round(d.apparent_temperature_min[1])}°`;
+    $("wxMidLabel").textContent = "feels at worst";
+    $("wxRain").textContent = `${Math.round(d.precipitation_probability_max[1] ?? 0)}%`;
+    $("wxRainLabel").textContent = "rain chance";
+  }
+  $("wxTemp").classList.toggle("range", view === 1);
+}
+
+function renderView() {
+  if (!data) return;
+
+  $("tabToday").classList.toggle("active", view === 0);
+  $("tabTomorrow").classList.toggle("active", view === 1);
+  $("tabToday").setAttribute("aria-selected", view === 0);
+  $("tabTomorrow").setAttribute("aria-selected", view === 1);
+
+  renderRecs();
+  renderConditions();
 
   const t = new Date();
   $("updatedAt").textContent =
     `Updated ${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · `;
 
   hide($("stateCard"));
-  show($("weatherCard"));
   show($("recsCard"));
+  show($("weatherCard"));
+}
+
+function setView(v) {
+  if (!data || v === view) return;
+  view = v;
+  renderView();
+  // little slide nudge so the swap is visible
+  for (const id of ["recsCard", "weatherCard"]) {
+    const el = $(id);
+    el.classList.remove("swap-left", "swap-right");
+    void el.offsetWidth; // restart animation
+    el.classList.add(v === 1 ? "swap-left" : "swap-right");
+  }
 }
 
 /* ---------- data fetching ---------- */
@@ -158,7 +291,7 @@ async function fetchJSON(url) {
 
 async function fetchWeather() {
   if (!place) return;
-  showLoading("Checking the sky… 🌤️");
+  showLoading("Interrogating the sky… 🌤️");
   hide($("weatherCard"));
   hide($("recsCard"));
   try {
@@ -166,24 +299,14 @@ async function fetchWeather() {
       "https://api.open-meteo.com/v1/forecast" +
       `?latitude=${place.lat}&longitude=${place.lon}` +
       "&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,is_day" +
-      "&hourly=precipitation_probability&forecast_hours=6&timezone=auto";
-    const data = await fetchJSON(url);
-    const c = data.current;
-    const probs = data.hourly?.precipitation_probability?.filter((p) => p != null) ?? [];
-    weather = {
-      temp: c.temperature_2m,
-      feels: c.apparent_temperature,
-      humidity: c.relative_humidity_2m,
-      precip: c.precipitation,
-      code: c.weather_code,
-      wind: c.wind_speed_10m,
-      isDay: c.is_day === 1,
-      rainProb: probs.length ? Math.max(...probs) : 0,
-    };
-    renderWeather();
+      "&hourly=temperature_2m,apparent_temperature,precipitation,precipitation_probability,weather_code,wind_speed_10m,is_day" +
+      "&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_min,precipitation_probability_max,wind_speed_10m_max" +
+      "&forecast_days=2&timezone=auto";
+    data = await fetchJSON(url);
+    renderView();
   } catch (err) {
     console.error(err);
-    showWelcome("Couldn't fetch the weather. Check your connection and try again?", "🙈");
+    showWelcome("The weather machine said no. Internet okay?", "🙈");
   }
 }
 
@@ -209,11 +332,11 @@ async function reverseGeocode(lat, lon) {
 
 function useGeolocation() {
   if (!navigator.geolocation) {
-    showWelcome("Your browser can't share location — search for your town instead!", "🗺️");
+    showWelcome("Your browser won't say where you are. Type it in, old-school.", "🗺️");
     openSheet("locationSheet");
     return;
   }
-  showLoading("Finding you… 📍");
+  showLoading("Hunting you down… 📍");
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       const lat = +pos.coords.latitude.toFixed(4);
@@ -224,7 +347,7 @@ function useGeolocation() {
     },
     () => {
       $("locationName").textContent = "Choose a place";
-      showWelcome("No worries — tell me where you are instead!", "🗺️");
+      showWelcome("Fine, keep your secrets. Where are you, then?", "🗺️");
     },
     { timeout: 10000, maximumAge: 5 * 60 * 1000 }
   );
@@ -239,7 +362,7 @@ async function searchPlaces(query) {
     );
     list.innerHTML = "";
     if (!d.results?.length) {
-      list.innerHTML = "<li class='none'>Nothing found — try another spelling?</li>";
+      list.innerHTML = "<li class='none'>Never heard of it. Try another spelling?</li>";
       return;
     }
     for (const r of d.results) {
@@ -292,7 +415,7 @@ function renderSettingsRows() {
       settings[meta.key] = +input.value;
       out.textContent = `${settings[meta.key]} ${meta.unit}`;
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-      renderWeather(); // live-update recommendations
+      renderView(); // live-update recommendations
     });
 
     row.append(top, input);
@@ -300,10 +423,34 @@ function renderSettingsRows() {
   }
 }
 
+/* ---------- swipe ---------- */
+
+function wireSwipe() {
+  let startX = 0, startY = 0, tracking = false;
+
+  document.addEventListener("touchstart", (e) => {
+    if (e.target.closest(".sheet-backdrop")) return; // don't fight sliders/sheets
+    tracking = true;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > 50) return;
+    if (dx > 0) setView(1); // swipe right → tomorrow
+    else setView(0);        // swipe left → back to today
+  }, { passive: true });
+}
+
 /* ---------- wiring ---------- */
 
 function init() {
   renderSettingsRows();
+  wireSwipe();
 
   $("settingsBtn").addEventListener("click", () => openSheet("settingsSheet"));
   $("locationPill").addEventListener("click", () => openSheet("locationSheet"));
@@ -311,12 +458,14 @@ function init() {
   $("geoBtn").addEventListener("click", () => { closeSheet("locationSheet"); useGeolocation(); });
   $("stateGeoBtn").addEventListener("click", useGeolocation);
   $("stateSearchBtn").addEventListener("click", () => openSheet("locationSheet"));
+  $("tabToday").addEventListener("click", () => setView(0));
+  $("tabTomorrow").addEventListener("click", () => setView(1));
 
   $("resetBtn").addEventListener("click", () => {
     settings = { ...DEFAULTS };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     renderSettingsRows();
-    renderWeather();
+    renderView();
   });
 
   $("searchForm").addEventListener("submit", (e) => {

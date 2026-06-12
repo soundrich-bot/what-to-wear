@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
+  <main class="app" id="app">
     <header class="topbar">
       <h1>🧣 What to Wear?</h1>
       <button id="settingsBtn" class="icon-btn" aria-label="Adjust thresholds" title="Settings">⚙️</button>
@@ -23,33 +23,39 @@
       <button id="refreshBtn" class="icon-btn" aria-label="Refresh weather" title="Refresh">↻</button>
     </div>
 
+    <div class="day-tabs" role="tablist">
+      <button id="tabToday" class="day-tab active" role="tab" aria-selected="true">Today</button>
+      <button id="tabTomorrow" class="day-tab" role="tab" aria-selected="false">Tomorrow</button>
+    </div>
+    <p class="swipe-hint">swipe ⇆ works too</p>
+
     <!-- loading / error / welcome -->
     <section id="stateCard" class="card state-card">
       <div id="stateEmoji" class="state-emoji">🔭</div>
-      <p id="stateMsg">Looking outside for you…</p>
+      <p id="stateMsg">Sticking my head out the window…</p>
       <div id="stateActions" class="state-actions" hidden>
-        <button id="stateGeoBtn" class="btn">📍 Use my location</button>
-        <button id="stateSearchBtn" class="btn btn-soft">🔎 Search for a place</button>
+        <button id="stateGeoBtn" class="btn">📍 Just find me</button>
+        <button id="stateSearchBtn" class="btn btn-soft">🔎 Fine, I'll type it</button>
       </div>
     </section>
 
-    <!-- current conditions -->
+    <!-- recommendations (top billing) -->
+    <section id="recsCard" class="card recs-card" hidden aria-live="polite">
+      <h2 id="recsTitle">Today's plan of attack</h2>
+      <div id="recsBody"></div>
+    </section>
+
+    <!-- conditions -->
     <section id="weatherCard" class="card weather-card" hidden aria-live="polite">
       <div class="big-emoji" id="wxEmoji">⛅</div>
       <div class="temp" id="wxTemp">–°</div>
       <div class="cond" id="wxCond">…</div>
       <div class="feels" id="wxFeels">Feels like –°</div>
       <ul class="stats">
-        <li><span class="stat-ico">💨</span><span class="stat-val" id="wxWind">–</span><span class="stat-label">wind</span></li>
-        <li><span class="stat-ico">💧</span><span class="stat-val" id="wxHumidity">–</span><span class="stat-label">humidity</span></li>
-        <li><span class="stat-ico">🌧️</span><span class="stat-val" id="wxRain">–</span><span class="stat-label">rain next 6h</span></li>
+        <li><span class="stat-ico">💨</span><span class="stat-val" id="wxWind">–</span><span class="stat-label" id="wxWindLabel">wind</span></li>
+        <li><span class="stat-ico" id="wxMidIco">💧</span><span class="stat-val" id="wxMid">–</span><span class="stat-label" id="wxMidLabel">humidity</span></li>
+        <li><span class="stat-ico">🌧️</span><span class="stat-val" id="wxRain">–</span><span class="stat-label" id="wxRainLabel">rain next 6h</span></li>
       </ul>
-    </section>
-
-    <!-- recommendations -->
-    <section id="recsCard" class="card recs-card" hidden aria-live="polite">
-      <h2>Today you should…</h2>
-      <ul id="recsList"></ul>
     </section>
 
     <footer>
@@ -62,8 +68,8 @@
   <div id="locationSheet" class="sheet-backdrop" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Choose location">
       <div class="sheet-handle"></div>
-      <h2>Where are you? 🗺️</h2>
-      <button id="geoBtn" class="btn">📍 Use my location</button>
+      <h2>Where even are you? 🗺️</h2>
+      <button id="geoBtn" class="btn">📍 Just find me</button>
       <div class="divider"><span>or search</span></div>
       <form id="searchForm" class="search-row">
         <input id="searchInput" type="search" placeholder="e.g. London, Tokyo, Oslo…"
@@ -80,7 +86,7 @@
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Adjust thresholds">
       <div class="sheet-handle"></div>
       <h2>Tune your comfort 🎚️</h2>
-      <p class="sheet-hint">Recommendations update instantly and are saved on this device.</p>
+      <p class="sheet-hint">Fiddle away — it saves automatically and updates the advice on the spot.</p>
       <div id="settingsRows"></div>
       <div class="sheet-buttons">
         <button id="resetBtn" class="btn btn-soft">Reset defaults</button>

@@ -86,6 +86,42 @@ body {
 }
 .location-pill .chev { color: var(--ink-soft); font-size: 0.8em; }
 
+/* ---------- day tabs ---------- */
+.day-tabs {
+  display: flex;
+  gap: 6px;
+  background: var(--pill);
+  box-shadow: var(--shadow);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.day-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink-soft);
+  padding: 9px 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.day-tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(240, 106, 90, 0.35);
+}
+
+.swipe-hint {
+  margin: -6px 0 0;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
 /* ---------- cards ---------- */
 .card {
   background: var(--card);
@@ -115,6 +151,8 @@ body {
   letter-spacing: -0.04em;
   margin-top: 4px;
 }
+
+.temp.range { font-size: 2.5rem; }
 
 .cond { font-weight: 700; margin-top: 2px; }
 
@@ -146,7 +184,31 @@ body {
 /* ---------- recommendations ---------- */
 .recs-card h2 { margin: 0 0 12px; font-size: 1.05rem; }
 
-#recsList {
+.segment-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin: 14px 0 8px;
+}
+.segment-head:first-child { margin-top: 0; }
+
+.segment-meta {
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.after-hours {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 8px 0;
+}
+
+.rec-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -155,7 +217,7 @@ body {
   gap: 10px;
 }
 
-#recsList li {
+.rec-list li {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -166,12 +228,12 @@ body {
   font-weight: 600;
   animation: pop-in 0.3s ease backwards;
 }
-#recsList li:nth-child(2) { animation-delay: 0.06s; }
-#recsList li:nth-child(3) { animation-delay: 0.12s; }
-#recsList li:nth-child(4) { animation-delay: 0.18s; }
-#recsList li:nth-child(5) { animation-delay: 0.24s; }
+.rec-list li:nth-child(2) { animation-delay: 0.06s; }
+.rec-list li:nth-child(3) { animation-delay: 0.12s; }
+.rec-list li:nth-child(4) { animation-delay: 0.18s; }
+.rec-list li:nth-child(5) { animation-delay: 0.24s; }
 
-#recsList .rec-emoji {
+.rec-list .rec-emoji {
   flex: none;
   width: 40px;
   height: 40px;
@@ -184,6 +246,20 @@ body {
 
 @keyframes pop-in {
   from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+/* day-switch nudge */
+.swap-left { animation: swap-left 0.25s ease; }
+.swap-right { animation: swap-right 0.25s ease; }
+
+@keyframes swap-left {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes swap-right {
+  from { opacity: 0; transform: translateX(-28px); }
   to { opacity: 1; transform: none; }
 }
 

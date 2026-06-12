@@ -6,7 +6,8 @@ A cute, minimal mobile web app that tells you what to wear based on the live wea
 
 - 📍 Detects your location via the browser Geolocation API, with a manual place search fallback
 - 🌤️ Live weather from [Open-Meteo](https://open-meteo.com/) (free, no API key)
-- 🧥 Simple clothing recommendations: coat / jacket / layers, umbrella or rain gear, hat & gloves
+- 🧥 Cheeky clothing advice for each part of the day — morning (6–12), afternoon (12–6) and evening (6–11pm) — dressed for the coldest feels-like (wind chill included) and worst rain/wind in each block
+- 👉 Swipe right (or tap the tab) for tomorrow's forecast and advice; swipe left to come back
 - 🎚️ Adjustable comfort thresholds, saved on your device (localStorage)
 - 📱 Mobile-first, single screen, no build step — plain HTML/CSS/JS
 
