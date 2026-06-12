@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>What to Wear?</title>
+  <meta name="description" content="Cute little app that tells you what to wear based on the weather right now.">
+  <meta name="theme-color" content="#cfe8ff">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧣</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <h1>🧣 What to Wear?</h1>
+      <button id="settingsBtn" class="icon-btn" aria-label="Adjust thresholds" title="Settings">⚙️</button>
+    </header>
+
+    <div class="location-row">
+      <button id="locationPill" class="location-pill">
+        📍 <span id="locationName">Finding you…</span> <span class="chev">▾</span>
+      </button>
+      <button id="refreshBtn" class="icon-btn" aria-label="Refresh weather" title="Refresh">↻</button>
+    </div>
+
+    <!-- loading / error / welcome -->
+    <section id="stateCard" class="card state-card">
+      <div id="stateEmoji" class="state-emoji">🔭</div>
+      <p id="stateMsg">Looking outside for you…</p>
+      <div id="stateActions" class="state-actions" hidden>
+        <button id="stateGeoBtn" class="btn">📍 Use my location</button>
+        <button id="stateSearchBtn" class="btn btn-soft">🔎 Search for a place</button>
+      </div>
+    </section>
+
+    <!-- current conditions -->
+    <section id="weatherCard" class="card weather-card" hidden aria-live="polite">
+      <div class="big-emoji" id="wxEmoji">⛅</div>
+      <div class="temp" id="wxTemp">–°</div>
+      <div class="cond" id="wxCond">…</div>
+      <div class="feels" id="wxFeels">Feels like –°</div>
+      <ul class="stats">
+        <li><span class="stat-ico">💨</span><span class="stat-val" id="wxWind">–</span><span class="stat-label">wind</span></li>
+        <li><span class="stat-ico">💧</span><span class="stat-val" id="wxHumidity">–</span><span class="stat-label">humidity</span></li>
+        <li><span class="stat-ico">🌧️</span><span class="stat-val" id="wxRain">–</span><span class="stat-label">rain next 6h</span></li>
+      </ul>
+    </section>
+
+    <!-- recommendations -->
+    <section id="recsCard" class="card recs-card" hidden aria-live="polite">
+      <h2>Today you should…</h2>
+      <ul id="recsList"></ul>
+    </section>
+
+    <footer>
+      <span id="updatedAt"></span>
+      Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>
+    </footer>
+  </main>
+
+  <!-- location picker sheet -->
+  <div id="locationSheet" class="sheet-backdrop" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Choose location">
+      <div class="sheet-handle"></div>
+      <h2>Where are you? 🗺️</h2>
+      <button id="geoBtn" class="btn">📍 Use my location</button>
+      <div class="divider"><span>or search</span></div>
+      <form id="searchForm" class="search-row">
+        <input id="searchInput" type="search" placeholder="e.g. London, Tokyo, Oslo…"
+               autocomplete="off" enterkeyhint="search">
+        <button type="submit" class="btn btn-small">Go</button>
+      </form>
+      <ul id="searchResults" class="search-results"></ul>
+      <button class="btn btn-soft sheet-close" data-close="locationSheet">Close</button>
+    </div>
+  </div>
+
+  <!-- settings sheet -->
+  <div id="settingsSheet" class="sheet-backdrop" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Adjust thresholds">
+      <div class="sheet-handle"></div>
+      <h2>Tune your comfort 🎚️</h2>
+      <p class="sheet-hint">Recommendations update instantly and are saved on this device.</p>
+      <div id="settingsRows"></div>
+      <div class="sheet-buttons">
+        <button id="resetBtn" class="btn btn-soft">Reset defaults</button>
+        <button class="btn sheet-close" data-close="settingsSheet">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
